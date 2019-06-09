@@ -1,17 +1,11 @@
-const Log = {
-    info: function (msg) {
-        console.log(msg)
-    },
-    genMsg: function (row, column, type) {
-        msg = `row:${row},column:${column}, a ${type} ${MESSAGES.IS_MATCHED}`
-    }
-}
 const TYPES = {
     KEYWORD: 'keyword',
     IDENTIFIER: 'identifier',
     COMMENT: 'comment',
     STRING: 'string',
     OPERATOR: 'operator',
+    PUNCTUATION: 'punctuation',
+    INTEGER: 'integer',
 }
 
 const MESSAGES = {
@@ -20,8 +14,7 @@ const MESSAGES = {
 
 
 function analysis() {
-    let str = `
-    # this is a comment
+    let str = `# this is a comment
 println("Hello World!");
 
 println(2 + 3 * 4);
@@ -42,27 +35,30 @@ print-range = λ(a, b)             # λ is synonym to lambda
 print-range(1, 5);
     `
     function is_id_start(ch) {
-        return /a-zλ_/.test(ch)
+        return /[a-zA-Zλ_]/.test(ch)
     }
     function is_id(ch) {
-        return is_id_start(ch) || /!\?-<>=0-9/.test(ch)
+        return is_id_start(ch) || /[!?\-<>=0-9]/.test(ch)
     }
     function is_comment_start(ch) {
         return ch === '#'
     }
     function is_digit(ch) {
-        return /0-9/.test(ch)
+        return /[0-9]/.test(ch)
     }
     function is_str_separator(ch) {
         return ch === '"'
     }
     function is_op(ch) {
-        return /\+\-\*\\/.test(ch)
+        return '+-*/%=&|<>!'.indexOf(ch) >= 0
     }
     function is_keyword(str) {
-        return "lambda println print print-range if then else".indexOf(str)
+        return " lambda println print print-range if then else λ ".indexOf(` ${str} `) >= 0
     }
-    const lines = str.split('\n')
+    function is_punc(ch) {
+        return ",;(){}[]".indexOf(ch) >= 0
+    }
+    let lines = str.split('\n')
     let row = 0, column = 0, curChar, curWord
     let res = []
     function read_next() {
@@ -71,53 +67,77 @@ print-range(1, 5);
     }
     function genToken(type) {
         Log.genMsg(row, column, type)
-        value = curWord
+        value = curWord ? curWord : curChar
         curWord = ''
         return {
             type,
             value,
         }
     }
+    function is_whitespace(ch) {
+        return ' \t\n'.indexOf(ch) >= 0
+    }
+    function skip_whitespace() {
+        while(is_whitespace(curChar)) {
+            next()
+        }
+    }
     function next() {
         column++;
-        curChar = lines[row][column]
+        curChar = lines[row-1][column-1]
+    }
+
+    const Log = {
+        genMsg: function (row, column, type) {
+            const slot = curWord ? `, ${curWord}, ` : " "
+            console.log(`row:${row},column:${column}, a ${type}${slot}${MESSAGES.IS_MATCHED}`)
+        }
     }
 
     for (line of lines) {
         row++
-        column = 0
+        column = 1
         curWord = ''
         curChar = line[0]
-        while (column < line.length) {
+        while (column <= line.length) {
+            skip_whitespace()
+            if(curChar == undefined) continue
             if (is_comment_start(curChar)) {
-                msg = Log.genMsg(row, column, TYPES.IS_MATCHED)
+                msg = Log.genMsg(row, column, TYPES.COMMENT)
                 break
-            } else if (is_digit(ch)) {
-                while (is_digit(ch)) {
-                    read_next
-                }
-            } else if (is_str_separator(ch)) {
-                next()
-                while (!is_str_separator(ch)) {
+            } else if (is_digit(curChar)) {
+                while (is_digit(curChar)) {
                     read_next()
                 }
-                res = res.push(genToken(TYPES.STRING, curWord))
+                res.push(genToken(TYPES.INTEGER))
+            } else if (is_str_separator(curChar)) {
+                next()
+                while (!is_str_separator(curChar)) {
+                    read_next()
+                }
+                next()
+                res.push(genToken(TYPES.STRING))
             } else if (is_id_start(curChar)) {
                 while (is_id(curChar)) {
                     read_next()
                 }
                 if (is_keyword(curWord)) {
-                    res = res.push(genToken(TYPES.KEYWORD))
+                    res.push(genToken(TYPES.KEYWORD))
                 } else {
-                    res = res.push(genToken(TYPES.IDENTIFIER))
+                    res.push(genToken(TYPES.IDENTIFIER))
                 }
-            } else if(is_op(ch)) {
+            } else if(is_op(curChar)) {
                 res.push(genToken(TYPES.OPERATOR))
+                next()
+            } else if(is_punc(curChar)) {
+                res.push(genToken(TYPES.PUNCTUATION))
+                next()
             } else {
                 next()
             }
         }
     }
+    return res
 }
 
 analysis()
