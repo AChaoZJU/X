@@ -1,0 +1,3 @@
+[submodule "MSTR-Internal-Recommended"]
+	path = MSTR-Internal-Recommended
+	url = git@github.com:AChaoZJU/MSTR-Internal-Recommended.git
